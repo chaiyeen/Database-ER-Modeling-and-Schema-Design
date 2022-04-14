@@ -1,1 +1,1 @@
-python taskB_my_parser.py ebay_data/items-*.json
+python taskC_my_parser.py ebay_data/items-*.json
