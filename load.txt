@@ -1,3 +1,8 @@
 .separator |
 .read create.sql
+
+.import item.dat Item
 .import category.dat Category
+.import person.dat Person
+.import bidInfo.dat BidInfo
+
