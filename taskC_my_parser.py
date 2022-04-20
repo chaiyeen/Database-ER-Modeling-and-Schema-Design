@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[31]:
+# In[100]:
 
 
 """
@@ -30,7 +30,7 @@ Happy parsing!
 """
 
 
-# In[32]:
+# In[101]:
 
 
 import sys
@@ -39,11 +39,16 @@ from re import sub
 
 columnSeparator = "|"
 
+itemsSeen = set()
+catsSeen = set()
+bidsSeen = set()
+personsSeen=set()
+        
 # Dictionary of months used for date transformation
 MONTHS = {'Jan':'01','Feb':'02','Mar':'03','Apr':'04','May':'05','Jun':'06',        'Jul':'07','Aug':'08','Sep':'09','Oct':'10','Nov':'11','Dec':'12'}
 
 
-# In[33]:
+# In[102]:
 
 
 """
@@ -53,7 +58,7 @@ def isJson(f):
     return len(f) > 5 and f[-5:] == '.json'
 
 
-# In[34]:
+# In[103]:
 
 
 """
@@ -68,7 +73,7 @@ def transformMonth(mon):
     
 
 
-# In[35]:
+# In[104]:
 
 
 """
@@ -82,7 +87,7 @@ def transformDttm(dttm):
     return date + ' ' + dttm[1]
 
 
-# In[36]:
+# In[105]:
 
 
 """
@@ -95,7 +100,26 @@ def transformDollar(money):
     return sub(r'[^\d.]', '', money)
 
 
-# In[39]:
+# In[106]:
+
+
+"""
+escaping qutation marks
+"""
+def transformString(string):
+    if string==None: return "\"NULL\""
+    string= string.strip()
+    
+    quotation_line= "\""
+    for s in string:
+        quotation_line+=s
+        if s=="\"": quotation_line+="\""
+    
+    quotation_line+="\""
+    return quotation_line
+
+
+# In[107]:
 
 
 """
@@ -106,63 +130,92 @@ of the necessary SQL tables for your database.
 def parseJson(json_file):
     with open(json_file, 'r') as f, open('item.dat', 'a') as itemtb, open('category.dat','a') as categorytb, open('bidInfo.dat','a') as bidtb, open('person.dat','a') as persontb:
         items = loads(f.read())['Items'] # creates a Python dictionary of Items for the supplied json file
+        global itemsSeen
+        global catsSeen
+        global bidsSeen
+        global personsSeen
+
         for item in items:
             """
             TODO: traverse the items dictionary to extract information from the
             given `json_file' and generate the necessary .dat files to generate
             the SQL tables based on your relation design
             """
-            #item table (itemID, Name, Currently, Buy Price, First Bid, Number of Bids, Started, Ends, Seller ID , Description)
-            itemstr= item['ItemID']+"|" +item['Name'] +"|"+ transformDollar(item['Currently'])+"|"
+            #item table 
+            itemstr= item['ItemID']+"|" +transformString(item['Name']) +"|"+ transformDollar(item['Currently'])+"|"
             if(not 'Buy_Price' in item.keys()): itemstr+="NULL"+"|"
-            else: itemstr+=item['Buy_Price']+"|"
+            else: itemstr+=transformString(item['Buy_Price'])+"|"
                 
             itemstr+=transformDollar(item['First_Bid'])+"|"+item['Number_of_Bids']+"|"
-            itemstr+=transformDttm(item['Started'])+"|"+transformDttm(item['Ends'])+"|"+item['Seller']['UserID']+"|"
+            itemstr+=transformDttm(item['Started'])+"|"+transformDttm(item['Ends'])+"|"
+            itemstr+=transformString(item['Seller']['UserID'])+"|"+transformString(item['Description'])
             
-            if(item['Description']==None): itemstr+= "NULL"            
-            else: itemstr+=item['Description']
+            if(itemstr not in itemsSeen):
+                itemsSeen.add(itemstr)
+                itemstr+='\n'
+                itemtb.write(itemstr)
             
-            itemstr+='\n'
-            itemtb.write(itemstr)
             
-            
-            # category table (ItemID, Category)
+            # category table 
             for c in item['Category']:
-                catstr= item['ItemID']+"|"+c+"\n"
-                categorytb.write(catstr)
+                catstr = item['ItemID']+"|"+transformString(c)
+                if(catstr not in catsSeen):
+                    catsSeen.add(catstr)
+                    catstr = str(len(catsSeen))+"|"+catstr+"\n"
+                    categorytb.write(catstr)
                 
-            # seller info > person (UserID, UserType, Rating, Location, Country)
-            pstr=item['Seller']['UserID']+"|"+"Seller|"+item['Seller']['Rating']+"|"+item['Location']+"|"+item['Country']+"\n"
-            persontb.write(pstr)
+                
+            # seller info > person 
+            pstr=transformString(item['Seller']['UserID'])
+            pstr+="|"+item['Seller']['Rating']+"|"
             
-            # bid information table (ItemID, UserID, Amount, Time)
-            # bidder - person (UserID, UserType, Rating, Location, Country)
+            if(pstr not in personsSeen):
+                personsSeen.add(pstr)
+                if(not 'Location' in item.keys()): pstr+= "\"NULL\""+"|"
+                else: pstr+= transformString(item['Location'])+"|"
+
+                if(not 'Country' in item.keys()): pstr+= "\"NULL\""+'\n'
+                else: pstr+= transformString(item['Country'])+"\n"
+                        
+                persontb.write(pstr)
+            
+            
+            
+            # bid information table 
+            # bidder - person 
             if(item['Bids']!=None):
                 for b in item['Bids']:
                     # bid info
-                    bstr= item['ItemID']+"|"+b['Bid']['Bidder']['UserID']+"|"+transformDollar(b['Bid']['Amount']) +"|"+ transformDttm(b['Bid']['Time'])+"\n"                   
-                    bidtb.write(bstr)
+                    bstr= item['ItemID']+"|"+transformString(b['Bid']['Bidder']['UserID'])+"|"+transformDollar(b['Bid']['Amount']) +"|"+ transformDttm(b['Bid']['Time'])                  
+                    if(bstr not in bidsSeen):
+                        bidsSeen.add(bstr)
+                        bstr = str(len(bidsSeen))+"|"+bstr+"\n"
+                        bidtb.write(bstr)
 
                     # bidder
-                    pstr= b['Bid']['Bidder']['UserID']+"|"+"bidder"+"|"+b['Bid']['Bidder']['Rating']+"|"
+                    pstr= transformString(b['Bid']['Bidder']['UserID'])+"|"+b['Bid']['Bidder']['Rating']+"|"
 
-                    if(not 'Location' in b['Bid']['Bidder'].keys()): pstr+= 'NULL'+"|"
-                    else: pstr+= b['Bid']['Bidder']['Location']+"|"
-                        
-                    if(not 'Country' in b['Bid']['Bidder'].keys()): pstr+= 'NULL'
-                    else: pstr+= b['Bid']['Bidder']['Country']
                     
-                    pstr+='\n'
-                    persontb.write(pstr)
-            pass
+                    
+                    
+                    if(pstr not in personsSeen):
+                        personsSeen.add(pstr)
+                        
+                        if(not 'Location' in b['Bid']['Bidder'].keys()): pstr+= 'NULL'+"|"
+                        else: pstr+= transformString(b['Bid']['Bidder']['Location'])+"|"
+
+                        if(not 'Country' in b['Bid']['Bidder'].keys()): pstr+= 'NULL'+'\n'
+                        else: pstr+= transformString(b['Bid']['Bidder']['Country'])+"\n"
+                        
+                        persontb.write(pstr)
+        
         itemtb.close()
         categorytb.close()
         bidtb.close()
         persontb.close()
 
 
-# In[40]:
+# In[108]:
 
 
 """

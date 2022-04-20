@@ -1,0 +1,1 @@
+SELECT ItemID FROM Item WHERE CurrPrice=(SELECT MAX(CurrPrice) FROM Item);

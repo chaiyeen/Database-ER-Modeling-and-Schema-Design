@@ -2,7 +2,12 @@
 .read create.sql
 
 .import item.dat Item
+update Item set Buy_Price=NULL where Buy_Price=-1;
+
 .import category.dat Category
+
 .import person.dat Person
+update Person set Country=NULL where Country="NULL";
+
 .import bidInfo.dat BidInfo
 
